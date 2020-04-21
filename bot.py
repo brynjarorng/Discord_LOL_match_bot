@@ -106,7 +106,8 @@ async def get_match_details(message, match):
 
 """ 
     Display player deaths
-    TODO: Make this ASYNC 
+    TODO: Make this ASYNC it is veeeery slow right now
+    TODO: FIX, it is a little broken when counting special game modes
 """
 async def deaths(message):
     # Get summoner match list
@@ -125,11 +126,12 @@ async def deaths(message):
         return
 
     # Go through match list and count deaths
-    deaths = 0
+    deaths_per_queue = {}
 
     for key in matches_played_per_queue:
         for match in matches_played_per_queue[key]:
             game_data = await get_match_details(message, match)
+
             if game_data == None:
                 return None
             
@@ -144,22 +146,27 @@ async def deaths(message):
                 if participant["player"]["accountId"] == encrypted_account_id:
                     participant_id = participant["participantId"]
                     break
+                
+                # Sometimes players are on the wrong server and have a differend accountId
+                if participant["player"]["summonerName"] == summoner["name"]:
+                    participant_id = participant["participantId"]
+                    break
             
             # Find participant in game and count deaths
             for participant in game_data["participants"]:
                 if participant["participantId"] == participant_id:
-                    deaths += participant["stats"]["deaths"]
+                    deaths_per_queue.setdefault(key, 0)
+                    deaths_per_queue[key] += participant["stats"]["deaths"]
 
     embed = discord.Embed(
         title = "Deaths in games this week",
         colour = discord.Colour.red()
     )
 
-    embed.add_field(name="Deaths: ", value=f"{deaths}", inline=True)
+    for key in matches_played_per_queue.keys():
+        embed.add_field(name=f"Deaths in {RIOT_QUEUES_DATA[key]['description']}:", value=f"{deaths_per_queue[key]}", inline=False)
 
     await message.channel.send(embed=embed)
-
-
 
     
 """ Print the help message """
