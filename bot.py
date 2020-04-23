@@ -15,8 +15,12 @@ RIOT_API_URL = "https://eun1.api.riotgames.com"
 RIOT_BASE_HDR = {"X-Riot-Token": RIOT_TOKEN}
 RIOT_QUEUES_FILE_PATH = "queues.json"
 RIOT_QUEUES_DATA = {}
-RIOT_REQUEST_MAX = 20
-RIOT_API_COOLDOWN = 1
+RIOT_API_REQ_SHORT_MAX = 20
+RIOT_API_SHORT_COOLDOWN = 1
+RIOT_API_SHORT_TIMESTAMP = time.time()
+RIOT_API_REQ_LONG_MAX = 100
+RIOT_API_LONG_COOLDOWN = 120
+RIOT_API_LONG_TIMESTAMP = time.time()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DISCORD_GUILD = os.getenv("DISCORD_GUILD")
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID")
@@ -107,7 +111,6 @@ async def get_match_details(message, match):
 """ 
     Display player deaths
     TODO: Make this ASYNC it is veeeery slow right now
-    TODO: FIX, it is a little broken when counting special game modes
 """
 async def deaths(message):
     # Get summoner match list
@@ -127,18 +130,17 @@ async def deaths(message):
 
     # Go through match list and count deaths
     deaths_per_queue = {}
+    total_games = 0
+    total_deaths = 0
 
     for key in matches_played_per_queue:
+        total_games += len(matches_played_per_queue[key])
+
         for match in matches_played_per_queue[key]:
             game_data = await get_match_details(message, match)
 
             if game_data == None:
                 return None
-            
-            #RIOT_REQUEST_COUNTER += 1
-            #if RIOT_REQUEST_COUNTER == RIOT_REQUEST_MAX:
-            #    time.sleep(RIOT_API_COOLDOWN)
-            #    RIOT_REQUEST_COUNTER = 0
 
             # Get participant ID
             participant_id = -1
@@ -157,6 +159,7 @@ async def deaths(message):
                 if participant["participantId"] == participant_id:
                     deaths_per_queue.setdefault(key, 0)
                     deaths_per_queue[key] += participant["stats"]["deaths"]
+                    total_deaths += participant["stats"]["deaths"]
 
     embed = discord.Embed(
         title = "Deaths in games this week",
@@ -165,6 +168,8 @@ async def deaths(message):
 
     for key in matches_played_per_queue.keys():
         embed.add_field(name=f"Deaths in {RIOT_QUEUES_DATA[key]['description']}:", value=f"{deaths_per_queue[key]}", inline=False)
+
+    embed.set_footer(text=f"Average deaths per game: {round(total_deaths / total_games, 2)}")
 
     await message.channel.send(embed=embed)
 
@@ -177,7 +182,8 @@ async def help_cmd(message):
         )
     
     embed.add_field(name="Match history", value="""```!matches <summoner name>```""", inline=False)
-    embed.add_field(name="Deaths -WIP", value="""```diff\n- !deaths <summoner name>```""", inline=False)
+    embed.add_field(name="Deaths", value="""```!deaths <summoner name>```""", inline=False)
+    embed.add_field(name="Calculate avg deaths -WIP", value="""```diff\n- !avgdeaths <summoner name>```""", inline=False)
     embed.add_field(name="Randomize teams -WIP", value="""```diff\n- !teams <voice channel 1> <voice vhannel 2>```""", inline=False)
 
     await message.channel.send(embed=embed)
@@ -207,6 +213,9 @@ async def is_command(message):
     
     elif "!deaths" in message.content:
         await deaths(message)
+
+    elif "!avgdeaths" in message.content:
+        await avg_deaths(message)
 
     else:
         # Catch-all
