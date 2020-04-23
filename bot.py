@@ -18,10 +18,12 @@ class Bot:
         self.RIOT_BASE_HDR = {"X-Riot-Token": self.RIOT_TOKEN}
         self.RIOT_QUEUES_FILE_PATH = "queues.json"
         self.RIOT_QUEUES_DATA = {}
-        self.RIOT_API_REQ_SHORT_MAX = 20
+        self.RIOT_API_REQ_SHORT_MAX_REQ = 20
+        self.RIOT_API_REQ_SHORT_CURR_REQ = 0
         self.RIOT_API_SHORT_COOLDOWN = 1
         self.RIOT_API_SHORT_TIMESTAMP = time.time()
-        self.RIOT_API_REQ_LONG_MAX = 100
+        self.RIOT_API_REQ_LONG_MAX_REQ = 100
+        self.RIOT_API_REQ_LONG_CURR_REQ = 0
         self.RIOT_API_LONG_COOLDOWN = 120
         self.RIOT_API_LONG_TIMESTAMP = time.time()
         self.DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -66,6 +68,49 @@ class Bot:
 
         client.run(self.DISCORD_TOKEN)
 
+    """Basic getter, follows the rate limit"""
+    async def get_data(self, query, header, channel, error, param = {}):
+        embed = discord.Embed(
+            title = "API cooldown",
+            colour = discord.Colour.red()
+        )
+
+        # Check short rate limit
+        short_cd_remaining = time.time() - self.RIOT_API_SHORT_TIMESTAMP
+        if short_cd_remaining <= self.RIOT_API_SHORT_COOLDOWN and self.RIOT_API_REQ_SHORT_CURR_REQ >= self.RIOT_API_REQ_SHORT_MAX_REQ:
+            time.sleep(short_cd_remaining)
+            self.RIOT_API_REQ_SHORT_CURR_REQ = 0
+        else:
+            self.RIOT_API_REQ_SHORT_CURR_REQ += 1
+
+            # need to check if rate limit needs to be set again
+            if short_cd_remaining > self.RIOT_API_SHORT_COOLDOWN:
+                self.RIOT_API_SHORT_TIMESTAMP = time.time()
+
+        # Check long rate limit
+        long_cd_remaining = time.time() - self.RIOT_API_LONG_TIMESTAMP
+        if short_cd_remaining <= self.RIOT_API_LONG_COOLDOWN and self.RIOT_API_REQ_LONG_CURR_REQ >= self.RIOT_API_REQ_LONG_MAX_REQ:
+            embed.add_field(name="WOAH, slow down there cowboy", value=f"Rate limit exceeded, waiting for {round(long_cd_remaining, 2)} seconds", inline=False)
+            await channel.send(embed=embed)
+
+            time.sleep(long_cd_remaining)
+            self.RIOT_API_REQ_LONG_CURR_REQ = 0
+        else:
+            self.RIOT_API_REQ_LONG_CURR_REQ += 1
+
+            # need to check if rate limit needs to be set again
+            if long_cd_remaining > self.RIOT_API_SHORT_COOLDOWN:
+                self.RIOT_API_SHORT_TIMESTAMP = time.time()
+
+        print(time.time() - self.RIOT_API_LONG_TIMESTAMP)
+        r = requests.get(query, headers=header, params=param)
+        
+        if r.status_code != 200:
+            await channel.send(error)
+            return None
+            
+        return r.json()
+
 
     # load all queue types into a dict
     async def load_queues(self):
@@ -77,26 +122,19 @@ class Bot:
 
     async def get_summoner_by_name(self, message, user):
         summoner_name = urllib.parse.quote(user)
-        r = requests.get(self.RIOT_API_URL + f"/lol/summoner/v4/summoners/by-name/{summoner_name}", headers=self.RIOT_BASE_HDR)
-        
-        if r.status_code != 200:
-            await message.channel.send("Error, user not found!")
-            return None
-            
-        return r.json()
+        return await self.get_data(self.RIOT_API_URL + f"/lol/summoner/v4/summoners/by-name/{summoner_name}", self.RIOT_BASE_HDR, message.channel, "Error, user not found!") 
 
 
     async def get_player_match_history(self, message, encrypted_account_id, week_start, week_end):
         # create request object
-        self.PARAMS = {"beginTime": str(int(week_start.timestamp()) * 1000), "endTime": str(int(week_end.timestamp())* 1000)}
+        params = {"beginTime": str(int(week_start.timestamp()) * 1000), "endTime": str(int(week_end.timestamp())* 1000)}
 
-        r = requests.get(self.RIOT_API_URL + f"/lol/match/v4/matchlists/by-account/{encrypted_account_id}", params=self.PARAMS, headers=self.RIOT_BASE_HDR)
+        data = await self.get_data(self.RIOT_API_URL + f"/lol/match/v4/matchlists/by-account/{encrypted_account_id}", self.RIOT_BASE_HDR, message.channel, "You have not played any matches this week!", params)
         
-        if r.status_code != 200:
-            await message.channel.send("You have not played any matches this week!")
+        if data == None:
             return None
 
-        matches_obj = r.json()['matches']
+        matches_obj = data['matches']
         matches_played_per_queue = {}
 
         for item in matches_obj:
@@ -138,13 +176,14 @@ class Bot:
 
     """ Get specific match info """
     async def get_match_details(self, message, match):
-        r = requests.get(self.RIOT_API_URL + f"/lol/match/v4/matches/{match['gameId']}", headers=self.RIOT_BASE_HDR)
+        data = await self.get_data(self.RIOT_API_URL + f"/lol/match/v4/matches/{match['gameId']}", self.RIOT_BASE_HDR, message.channel, "Failed to fetch data, please try again later")
+        # r = requests.get(self.RIOT_API_URL + f"/lol/match/v4/matches/{match['gameId']}", headers=self.RIOT_BASE_HDR)
 
-        if r.status_code != 200:
-            await message.channel.send("Failed to fetch data, please try again later")
-            return None
+        # if r.status_code != 200:
+        #     await message.channel.send("Failed to fetch data, please try again later")
+        #     return None
 
-        return r.json()
+        return data
 
 
     """ 
