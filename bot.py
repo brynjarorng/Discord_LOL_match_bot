@@ -6,6 +6,7 @@ import urllib.parse
 from datetime import timedelta, datetime
 import json
 import time
+import psycopg2
 
 
 class Bot:
@@ -29,6 +30,10 @@ class Bot:
         self.DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
         self.DISCORD_GUILD = os.getenv("DISCORD_GUILD")
         self.DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID")
+        self.CONNECTION = None
+        self.CURSOR = None
+
+        self.setup_db()
         client = discord.Client()
         
         @client.event
@@ -55,6 +60,8 @@ class Bot:
             
             elif "!deaths" in message.content:
                 await self.deaths(message)
+            elif "!winrate" in message.content:
+                await self.get_all_matches(message)
 
             else:
                 # Catch-all
@@ -67,6 +74,35 @@ class Bot:
                     await is_command(message)
 
         client.run(self.DISCORD_TOKEN)
+
+
+    """Cleanup"""
+    def __exit__(self):
+        if(self.CONNECTION):
+            self.CURSOR.close()
+            self.CONNECTION.close()
+            print("PostgreSQL connection is closed")
+    
+
+    """Setup db connection"""
+    def setup_db(self):
+        try:
+            self.CONNECTION = psycopg2.connect(user = os.getenv("DB_USER"),
+                                        password = os.getenv("DB_PASS"),
+                                        host = os.getenv("DB_HOST"),
+                                        port = os.getenv("DB_PORT"),
+                                        database = os.getenv("DB_NAME"))
+
+            self.CURSOR = self.CONNECTION.cursor()
+
+            # Print PostgreSQL version
+            self.CURSOR.execute("SELECT version();")
+            record = self.CURSOR.fetchone()
+            print("You are connected to - ", record,"\n")
+
+        except (Exception, psycopg2.Error) as error :
+            print ("Error while connecting to PostgreSQL", error)
+
 
     """Basic getter, follows the rate limit"""
     async def get_data(self, query, header, channel, error, param = {}):
@@ -102,10 +138,11 @@ class Bot:
             if long_cd_remaining > self.RIOT_API_SHORT_COOLDOWN:
                 self.RIOT_API_SHORT_TIMESTAMP = time.time()
 
-        print(time.time() - self.RIOT_API_LONG_TIMESTAMP)
+        # print(time.time() - self.RIOT_API_LONG_TIMESTAMP)
         r = requests.get(query, headers=header, params=param)
         
         if r.status_code != 200:
+            print(r.__dict__)
             await channel.send(error)
             return None
             
@@ -251,6 +288,33 @@ class Bot:
 
         await message.channel.send(embed=embed)
 
+    """WIP"""
+    async def get_all_matches(self, message):
+        summoner = await self.get_summoner_by_name(message, message.content[9:])
+        if summoner == None:
+            return
+        
+        encrypted_account_id = summoner["accountId"]        
+
+
+        count = 0
+        cum = []
+        while True:
+            params = {"beginIndex": f"{count}", "endIndex": f"{count+99}"}
+            data = await self.get_data(self.RIOT_API_URL + f"/lol/match/v4/matchlists/by-account/{encrypted_account_id}", self.RIOT_BASE_HDR, message.channel, "You have not played any matches this week!", params)
+            if data == None:
+                break
+            cum.append(data)
+            print(count)
+            count += 100
+
+        # TODO: Refactor, do in background, aff table and save
+
+        print("-----------")
+        print(data)
+        print("-----------")
+        return None
+
         
     """ Print the help message """
     async def help_cmd(self, message):
@@ -261,10 +325,10 @@ class Bot:
         
         embed.add_field(name="Match history", value="""```!matches <summoner name>```""", inline=False)
         embed.add_field(name="Deaths", value="""```!deaths <summoner name>```""", inline=False)
+        embed.add_field(name="Calculate ranked winrate -WIP", value="""```diff\n- !winrate <player 1> <player 2>```""", inline=False)
         embed.add_field(name="Randomize teams -WIP", value="""```diff\n- !teams <voice channel 1> <voice vhannel 2>```""", inline=False)
 
         await message.channel.send(embed=embed)
-
 
 if __name__ == "__main__":
     bot = Bot()
