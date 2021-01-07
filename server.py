@@ -19,7 +19,7 @@ class Bot(discord.Client):
         self.RIOT_TOKEN = os.getenv("RIOT_TOKEN")
         self.RIOT_API_URL = "https://eun1.api.riotgames.com"
         self.RIOT_BASE_HDR = {"X-Riot-Token": self.RIOT_TOKEN}
-        self.RIOT_QUEUES_FILE_PATH = "queues.json"
+        self.RIOT_QUEUES_FILE_PATH = "data/queues.json"
         self.RIOT_QUEUES_DATA = {}
         self.RIOT_API_REQ_SHORT_MAX_REQ = 20
         self.RIOT_API_REQ_SHORT_CURR_REQ = 0
@@ -68,7 +68,7 @@ class Bot(discord.Client):
         
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":    
     # load env
     load_dotenv()
 
