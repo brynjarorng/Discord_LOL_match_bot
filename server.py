@@ -12,7 +12,8 @@ import time
 
 from db import DB
 
-from commands.app import parse_command
+from commands.utils import print_help
+from commands.aram.aram_picker import aram_picker
 
 class Bot(discord.Client):
     def __init__(self):
@@ -54,9 +55,23 @@ class Bot(discord.Client):
     async def on_message(self, message):
         if str(message.guild) == self.DISCORD_GUILD:
             if len(message.content) > 0 and message.content[0] == "!" and not message.author.bot:
-                await parse_command(message)
+                await self.parse_command(message)
 
         
+    async def parse_command(self, message):
+        try:
+            if "!aram" in message.content:
+                await aram_picker(message)
+            elif "!deaths" in message.content:
+                return 1
+            elif "!winrate" in message.content:
+                return await get_player_winrate(message)
+            else:
+                await print_help(message)
+        except Exception as e:
+            print(e)
+
+
 
     # load all queue types into a dict
     async def load_queues(self):
@@ -64,6 +79,8 @@ class Bot(discord.Client):
             queues = json.load(json_file)
             for item in queues:
                 self.RIOT_QUEUES_DATA[item["queueId"]] = {"map": item["map"], "description": item["description"]}
+
+    
 
         
 
