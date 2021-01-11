@@ -10,30 +10,17 @@ from datetime import timedelta, datetime
 import json
 import time
 
-from db import DB
+from commands.DataGetter import DataGetter
 
 from commands.utils import print_help
 from commands.aram.aram_picker import aram_picker
 
 class Bot(discord.Client):
     def __init__(self):
-        self.RIOT_TOKEN = os.getenv("RIOT_TOKEN")
-        self.RIOT_API_URL = "https://eun1.api.riotgames.com"
-        self.RIOT_BASE_HDR = {"X-Riot-Token": self.RIOT_TOKEN}
-        self.RIOT_QUEUES_FILE_PATH = "data/queues.json"
-        self.RIOT_QUEUES_DATA = {}
-        self.RIOT_API_REQ_SHORT_MAX_REQ = 20
-        self.RIOT_API_REQ_SHORT_CURR_REQ = 0
-        self.RIOT_API_SHORT_COOLDOWN = 1
-        self.RIOT_API_SHORT_TIMESTAMP = time.time()
-        self.RIOT_API_REQ_LONG_MAX_REQ = 100
-        self.RIOT_API_REQ_LONG_CURR_REQ = 0
-        self.RIOT_API_LONG_COOLDOWN = 120
-        self.RIOT_API_LONG_TIMESTAMP = time.time()
         self.DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
         self.DISCORD_GUILD = os.getenv("DISCORD_GUILD")
         self.DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID")
-        self.db = DB()
+        self.data_getter = DataGetter()
 
         super().__init__()
 
@@ -47,9 +34,6 @@ class Bot(discord.Client):
             if g.name == self.DISCORD_GUILD:
                 print(f"{self.guilds}")
                 break
-
-        # load data
-        await self.load_queues()
 
 
     async def on_message(self, message):
@@ -70,15 +54,6 @@ class Bot(discord.Client):
                 await print_help(message)
         except Exception as e:
             print(e)
-
-
-
-    # load all queue types into a dict
-    async def load_queues(self):
-        with open(self.RIOT_QUEUES_FILE_PATH) as json_file:
-            queues = json.load(json_file)
-            for item in queues:
-                self.RIOT_QUEUES_DATA[item["queueId"]] = {"map": item["map"], "description": item["description"]}
 
     
 
