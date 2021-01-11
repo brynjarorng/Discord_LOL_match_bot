@@ -2,11 +2,6 @@ import json
 import random
 import discord
 
-async def parse_command(message):
-    if "!aram" in message.content:
-        await aram_picker(message)
-
-
 def pick_champ(champion_list, champion_list_length):
     index = random.randrange(0, champion_list_length)
     champion1 = champion_list[index]
@@ -21,14 +16,53 @@ def pick_champ(champion_list, champion_list_length):
     return (champion1, champion2)
 
 
+def get_json_data(path):
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except:
+        print("Failed to get data, file missing?")
+        data = None
+
+    return data
+
+
+
+async def parse_message(message):
+    """
+    content : Discord.py message object
+        The content of the message is on the form "!aram <a> <b>" where "a" and "b" are two integers from 1-5 (inclusive)
+    """
+    content = message.content.split(" ")
+
+    # Validate message
+    try:
+        a = int(content[1])
+        b = int(content[2])
+
+        if a < 1 or a > 5:
+            raise Exception
+        if b < 1 or b > 5:
+            raise Exception
+    except:
+        # TODO: General method to send error messages to client
+        await message.channel.send("Incorrect message format")
+
+        raise Exception("Incorrect message format")
+
+    
+    return content
+
+
+
 async def aram_picker(message):
-    with open("./data/champions.json") as f:
-        data = json.load(f)
+    data = get_json_data("./data/champions.json")
         
     champion_list = list(data['data'])
     champion_list_length = len(champion_list)
 
-    message_content = message.content.split(" ")
+    # Parse message
+    message_content = await parse_message(message)
 
     team_1_champions = []
     team_2_champions = []
@@ -59,14 +93,12 @@ async def aram_picker(message):
 
     team_1_formatted = "```HTTP\n"
     for i in team_1_champions:
-        team_1_formatted += "{:10s} {:10s}\n".format(i[0], i[1])
-        #team_1_formatted += i[0] + " - " + i[1] + "\n"
+        team_1_formatted += "{:13s} {:13s}\n".format(i[0], i[1])
     team_1_formatted += "```"
 
     team_2_formatted = "```yaml\n"
     for i in team_2_champions:
-        team_2_formatted += "{:10s} {:10s}\n".format(i[0], i[1])
-        #team_2_formatted += i[0] + " - " + i[1] + "\n"
+        team_2_formatted += "{:13s} {:13s}\n".format(i[0], i[1])
     team_2_formatted += "```"
 
 
@@ -75,15 +107,3 @@ async def aram_picker(message):
 
 
     await message.channel.send(embed=embed)
-
-
-
-
-
-
-# embed = discord.Embed(
-#             title = "ARAM picker",
-#             colour = discord.Colour.green()
-#         )
-
-# embed.add_field(name="ARAM champion randomizer", value="""```!aram <num team 1> <num team 2>```""", inline=False)

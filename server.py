@@ -12,7 +12,7 @@ import time
 
 from db import DB
 
-from commands import parse_command
+from commands.app import parse_command
 
 class Bot(discord.Client):
     def __init__(self):
