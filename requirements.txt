@@ -20,7 +20,7 @@ selenium==3.141.0
 six==1.14.0
 soupsieve==2.0
 urllib3==1.25.8
-websockets==8.1
+websockets==9.1
 wrapt==1.11.2
 yarl==1.4.2
 psycopg2==2.8.6
